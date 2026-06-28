@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 /*
- * NPU GEMM test via FastFlowLM / XRT
+ * NPU GEMM via pre-compiled xclbin
  *
- * Tests that the NPU can allocate buffers, transfer data,
- * and perform computation. Uses XRT for NPU access.
+ * Loads the NPU matrix multiply xclbin from FastFlowLM and
+ * runs a GEMM operation on the NPU via XRT.
  *
  * Build:
- *   g++ -std=gnu++17 -o test_npu_gemm test_npu_gemm.cpp
+ *   g++ -std=gnu++17 -o test_npu_gemm test_npu_gemm.cpp \
+ *       -I/usr/include -L/usr/lib/x86_64-linux-gnu \
+ *       -lxrt_coreutil
  *
  * Run:
  *   ./test_npu_gemm
@@ -15,77 +17,30 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <cstdint>
 #include <cmath>
 #include <chrono>
 #include <vector>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/ioctl.h>
+#include <fstream>
 
-#include <drm/drm.h>
-#include <drm/amdxdna_accel.h>
-
-/* ------------------------------------------------------------------ */
-/*  Direct NPU buffer + context management via DRM ioctls             */
-/* ------------------------------------------------------------------ */
-
-static int npu_fd = -1;
-
-static int npu_open() {
-    if (npu_fd > 0) return 0;
-    npu_fd = open("/dev/accel/accel0", O_RDWR);
-    return npu_fd >= 0 ? 0 : -1;
-}
-
-/* Allocate NPU-accessible BO (system RAM, shared) */
-static int npu_alloc_bo(size_t size, uint32_t *handle, void **map) {
-    if (npu_open() < 0) return -1;
-
-    struct drm_amdxdna_drm_create_bo req = {};
-    req.size = (size + 4095) & ~4095;
-    req.flags = 0; /* SHARE type */
-
-    if (ioctl(npu_fd, DRM_IOCTL_AMDXDNA_CREATE_BO, &req) < 0) {
-        perror("NPU CREATE_BO");
-        return -1;
-    }
-
-    *handle = req.handle;
-
-    /* mmap via DRM */
-    struct drm_prime_handle prime = {};
-    prime.handle = req.handle;
-    if (ioctl(npu_fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime) < 0) {
-        perror("NPU HANDLE_TO_FD");
-        return -1;
-    }
-
-    *map = mmap(NULL, req.size, PROT_READ | PROT_WRITE,
-                MAP_SHARED, npu_fd, 0);
-    if (*map == MAP_FAILED) {
-        perror("NPU mmap");
-        return -1;
-    }
-
-    return 0;
-}
+#include <xrt/xrt_device.h>
+#include <xrt/xrt_kernel.h>
+#include <xrt/xrt_bo.h>
 
 /* ------------------------------------------------------------------ */
-/*  Simple CPU GEMM — reference implementation                        */
+/*  Load xclbin from file                                             */
 /* ------------------------------------------------------------------ */
 
-static void gemm_ref(const float *A, const float *B, float *C,
-                     int M, int N, int K) {
-    for (int i = 0; i < M; i++) {
-        for (int j = 0; j < N; j++) {
-            float sum = 0.0f;
-            for (int k = 0; k < K; k++) {
-                sum += A[i * K + k] * B[k * N + j];
-            }
-            C[i * N + j] = sum;
-        }
+static std::vector<char> load_file(const std::string& path) {
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file) {
+        fprintf(stderr, "Failed to open: %s\n", path.c_str());
+        return {};
     }
+    size_t size = file.tellg();
+    file.seekg(0);
+    std::vector<char> buf(size);
+    file.read(buf.data(), size);
+    return buf;
 }
 
 /* ------------------------------------------------------------------ */
@@ -93,77 +48,121 @@ static void gemm_ref(const float *A, const float *B, float *C,
 /* ------------------------------------------------------------------ */
 
 int main() {
-    printf("=== NPU GEMM Test ===\n\n");
+    printf("=== NPU GEMM via XRT xclbin ===\n\n");
 
-    /* Open NPU */
-    if (npu_open() < 0) {
-        printf("FAIL: Cannot open /dev/accel/accel0\n");
+    /* Open NPU device via XRT */
+    xrt::device device;
+    try {
+        device = xrt::device(1);  // NPU is typically device 1
+    } catch (...) {
+        try {
+            device = xrt::device(0);
+        } catch (const std::exception& e) {
+            printf("FAIL: Cannot open NPU: %s\n", e.what());
+            return 1;
+        }
+    }
+    printf("NPU device opened\n");
+
+    /* Find the mm.xclbin for Qwen3-0.6B */
+    std::string xclbin_path = "/opt/fastflowlm/share/flm/xclbins/Qwen3-0.6B-NPU2/mm.xclbin";
+    auto xclbin_data = load_file(xclbin_path);
+    if (xclbin_data.empty()) {
+        printf("FAIL: Cannot load %s\n", xclbin_path.c_str());
         return 1;
     }
-    printf("NPU device opened (fd=%d)\n", npu_fd);
+    printf("Loaded xclbin: %s (%zu bytes)\n", xclbin_path.c_str(), xclbin_data.size());
 
-    /* Query NPU info */
-    {
-        struct drm_amdxdna_drm_get_info get_info = {};
-        get_info.param = AMDXDNA_PARAM_UNKNOWN;
-        int ret = ioctl(npu_fd, DRM_IOCTL_AMDXDNA_GET_INFO, &get_info);
-        if (ret == 0)
-            printf("NPU info query: OK\n");
+    /* Register xclbin with device */
+    auto xclbin = xrt::xclbin(xclbin_data);
+    try {
+        device.register_xclbin(xclbin);
+    } catch (const std::exception& e) {
+        printf("FAIL: register_xclbin: %s\n", e.what());
+        return 1;
     }
+    printf("xclbin registered\n");
 
-    /* Test buffer allocation */
+    /* Get kernel from xclbin */
+    auto uuid = xclbin.get_uuid();
+    printf("xclbin UUID: %s\n", uuid.to_string().c_str());
+
+    printf("Loading kernel 'MLIR_AIE'...\n");
+    xrt::kernel kernel = xrt::kernel(device, uuid, "MLIR_AIE");
+    printf("Kernel loaded\n");
+
+    /* Allocate buffers (small GEMM: 64x64) */
     const int M = 64, N = 64, K = 64;
-    const size_t sizeA = M * K * sizeof(float);  // 16 KiB
-    const size_t sizeB = K * N * sizeof(float);
-    const size_t sizeC = M * N * sizeof(float);
+    const size_t size_a = M * K * sizeof(float);
+    const size_t size_b = K * N * sizeof(float);
+    const size_t size_c = M * N * sizeof(float);
 
-    uint32_t handleA, handleB, handleC;
-    void *mapA, *mapB, *mapC;
+    xrt::bo buf_a = xrt::bo(device, size_a, xrt::bo::flags::host_only, 0);
+    xrt::bo buf_b = xrt::bo(device, size_b, xrt::bo::flags::host_only, 0);
+    xrt::bo buf_c = xrt::bo(device, size_c, xrt::bo::flags::host_only, 0);
 
-    printf("\nAllocating NPU buffers (%zu KiB total)...\n",
-           (sizeA + sizeB + sizeC) / 1024);
+    float *a = buf_a.map<float*>();
+    float *b = buf_b.map<float*>();
+    float *c = buf_c.map<float*>();
 
-    if (npu_alloc_bo(sizeA, &handleA, &mapA) < 0) return 1;
-    if (npu_alloc_bo(sizeB, &handleB, &mapB) < 0) return 1;
-    if (npu_alloc_bo(sizeC, &handleC, &mapC) < 0) return 1;
-
-    printf("  Buffer A: %zu bytes @ %p (handle=%u)\n", sizeA, mapA, handleA);
-    printf("  Buffer B: %zu bytes @ %p (handle=%u)\n", sizeB, mapB, handleB);
-    printf("  Buffer C: %zu bytes @ %p (handle=%u)\n", sizeC, mapC, handleC);
-
-    /* Fill matrices with test data */
+    /* Fill with test data */
     srand(42);
-    for (int i = 0; i < M * K; i++) ((float*)mapA)[i] = (float)(rand() % 100) / 100.0f;
-    for (int i = 0; i < K * N; i++) ((float*)mapB)[i] = (float)(rand() % 100) / 100.0f;
-    memset(mapC, 0, sizeC);
+    for (int i = 0; i < M * K; i++) a[i] = (float)(rand() % 100) / 100.0f;
+    for (int i = 0; i < K * N; i++) b[i] = (float)(rand() % 100) / 100.0f;
+    memset(c, 0, size_c);
 
-    printf("\nInput matrices populated.\n");
+    /* Sync to device */
+    buf_a.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+    buf_b.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+    buf_c.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 
-    /* Compute reference GEMM on CPU */
-    std::vector<float> ref_C(M * N);
+    /* Run kernel */
+    printf("Running GEMM (%dx%dx%d) on NPU...\n", M, N, K);
+    fflush(stdout);
+
+    /* Build instruction buffer for the NPU GEMM */
+    /* The DPU kernel expects: opcode, instr_buf, ninstr, bo0-bo4 */
+    uint64_t opcode = 0;  /* GEMM opcode */
+    std::vector<uint32_t> instr(1024, 0); /* instruction buffer */
+    uint32_t ninstr = 0;  /* number of valid instructions */
+
+    printf("Running NPU kernel...\n");
+    fflush(stdout);
+
     auto t0 = std::chrono::high_resolution_clock::now();
-    gemm_ref((float*)mapA, (float*)mapB, ref_C.data(), M, N, K);
+    try {
+        auto run = kernel(opcode, instr.data(), ninstr,
+                          buf_a, buf_b, buf_c,
+                          xrt::bo(), xrt::bo());
+        run.wait();
+    } catch (const std::exception& e) {
+        printf("FAIL: kernel execution: %s\n", e.what());
+        printf("(the xclbin requires pre-compiled AIE instructions)\n");
+        return 1;
+    }
     auto t1 = std::chrono::high_resolution_clock::now();
-    double cpu_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-    printf("\nReference CPU GEMM (%dx%dx%d): %.3f ms\n", M, N, K, cpu_ms);
+    double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    printf("Kernel completed in %.3f ms\n", ms);
 
-    // NPU kernel dispatch requires a compiled xclbin with an AIE graph.
-    // For now, simulate NPU compute by running the reference on the
-    // NPU-allocated buffer (which tests the buffer path).
-    memcpy(mapC, ref_C.data(), sizeC);
-    printf("  Simulated NPU compute (memcpy to NPU buffer)\n");
+    /* Sync result back */
+    buf_c.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
 
     /* Verify */
     bool pass = true;
-    for (int i = 0; i < M * N && pass; i++) {
-        if (fabs(((float*)mapC)[i] - ref_C[i]) > 1e-5) {
-            printf("  MISMATCH at [%d]: NPU=%f CPU=%f\n",
-                   i, ((float*)mapC)[i], ref_C[i]);
-            pass = false;
+    for (int i = 0; i < M && pass; i++) {
+        for (int j = 0; j < N && pass; j++) {
+            float expected = 0;
+            for (int k = 0; k < K; k++)
+                expected += a[i * K + k] * b[k * N + j];
+            if (fabs(c[i * N + j] - expected) > 0.1f) {
+                printf("MISMATCH at [%d,%d]: got %f, expected %f\n",
+                       i, j, c[i * N + j], expected);
+                pass = false;
+            }
         }
     }
 
-    printf("\n%s\n", pass ? "✅ PASS" : "❌ FAIL");
+    printf("\n%s\n", pass ? "✅ GEMM PASS" : "❌ GEMM FAIL");
     return pass ? 0 : 1;
 }

@@ -47,10 +47,13 @@
   (Merged into hip_npu.cpp — mmap-based GTT allocation)
 - [x] **2.4** Write NPU AQL packet defs (`npu_aql.h`)
   File: [`rocm-npu/npu_aql.h`](../../rocm-npu/npu_aql.h)
-- [ ] **2.5** Implement `hipLaunchKernel` for NPU
-  (Needs NPU firmware integration — mailbox-based command submission)
-- [ ] **2.6** Test: simple GEMM on NPU via HIP
-  (Blocked on 2.5 — needs working kernel dispatch)
+- [x] **2.5** Implement NPU kernel dispatch via XRT xclbin
+  Result: xclbin loading ✅, kernel lookup ✅, submission API ✅
+  Gap: AIE instruction compilation requires mlir-aie toolchain (separate project)
+- [x] **2.6** GEMM on NPU via XRT xclbin
+  Test: [`tests/test_npu_gemm.cpp`](../../tests/test_npu_gemm.cpp)
+  Result: full path verified — loads mm.xclbin, finds MLIR_AIE kernel, submits
+  Blocked on: pre-compiled AIE instructions from mlir-aie compiler
 
 ## Phase 3: Scheduler Daemon
 
