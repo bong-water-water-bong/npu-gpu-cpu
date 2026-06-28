@@ -1,5 +1,5 @@
 diff --git a/drivers/accel/amdxdna/aie2_pci.c b/drivers/accel/amdxdna/aie2_pci.c
-index 9368de9..6e08eca 100644
+index 9368de9..bb3cd47 100644
 --- a/drivers/accel/amdxdna/aie2_pci.c
 +++ b/drivers/accel/amdxdna/aie2_pci.c
 @@ -372,16 +372,16 @@ static int aie2_hw_start(struct amdxdna_dev *xdna)
@@ -24,12 +24,13 @@ index 9368de9..6e08eca 100644
  	}
  
  	ret = aie2_get_mgmt_chann_info(ndev);
-@@ -442,6 +442,8 @@ stop_fw:
+@@ -442,6 +442,9 @@ stop_fw:
  	xdna_mailbox_stop_channel(ndev->aie.mgmt_chann);
  stop_psp:
  	aie_psp_stop(ndev->aie.psp_hdl);
 +stop_psp_no_smu:
 +	/* SMU not initialized yet — skip SMU fini, just free channel */
++	goto free_channel;
  fini_smu:
  	aie2_smu_fini(ndev);
  free_channel:
