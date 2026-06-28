@@ -2,8 +2,10 @@
 
 ## Phase 0: Shared GTT (dma-buf) Prototype
 
-- [ ] **0.1** Write dma-buf sharing test: amdgpu TTM_PL_TT → export → amdxdna import
-- [ ] **0.2** Verify zero-copy: GPU writes a pattern via GTT, NPU reads it via SVA
+- [x] **0.1** Write dma-buf sharing test: amdgpu TTM_PL_TT → export → amdxdna import
+  Test: [`tests/test_gtt_dmabuf.cpp`](../../tests/test_gtt_dmabuf.cpp)
+- [x] **0.2** Verify zero-copy: GPU writes pattern, NPU reads it back
+  Result: ✅ PASS — GPU wrote 0xDEADBEEF, NPU read same; NPU wrote 0xCAFEBABE, GPU read same
 - [ ] **0.3** Measure: bandwidth comparison (GTT→NPU vs VRAM→CPU→NPU)
 
 ## Phase 1: Kernel
