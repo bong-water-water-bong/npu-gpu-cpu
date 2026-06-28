@@ -1,0 +1,33 @@
+# Tasks — Unified AMDGPU Driver
+
+## Phase 1: Kernel
+
+- [ ] **1.1** Read amdxdna staging driver — MMIO layout, firmware ABI, ring protocol
+- [ ] **1.2** Read amdgpu IP block init — how VCN/SDMA/JPEG are initialized
+- [ ] **1.3** Write `amdgpu_npu_early_init()` — PCI BAR discovery
+- [ ] **1.4** Write `amdgpu_npu_init()` — firmware load, ring init
+- [ ] **1.5** Add `TTM_PL_NPU` to TTM memory manager
+- [ ] **1.6** Register `AMDGPU_NPU_CTX` IOCTL
+- [ ] **1.7** Write `amdgpu_npu_sched.c` — NPU ring submission
+- [ ] **1.8** Add NPU PCI DID to driver table
+- [ ] **1.9** Build-test kernel module
+
+## Phase 2: ROCm Userspace
+
+- [ ] **2.1** Extend `rocminfo` to detect NPU agent
+- [ ] **2.2** Write `hip_npu.cpp` — device enumeration
+- [ ] **2.3** Write `hip_npu_memory.cpp` — hipMalloc/hipFree
+- [ ] **2.4** Write NPU AQL packet defs (`npu_aql.h`)
+- [ ] **2.5** Implement `hipLaunchKernel` for NPU
+- [ ] **2.6** Test: simple GEMM on NPU via HIP
+
+## Phase 3: Scheduler Daemon
+
+- [ ] **3.1** Write `npu-gpu-cpud` — gRPC/REST API
+- [ ] **3.2** Implement dispatch policy table
+- [ ] **3.3** Integrate with Lemonade BackendManager
+
+## Documentation
+
+- [ ] **4.1** Write `docs/wiki/amdgpu-npu-architecture.md`
+- [ ] **4.2** Write `docs/wiki/building-and-testing.md`
