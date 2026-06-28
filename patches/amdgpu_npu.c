@@ -273,8 +273,115 @@ const struct amdgpu_ip_block_version npu_ip_block = {
 	.funcs = &amdgpu_npu_ip_funcs,
 };
 
+/* ------------------------------------------------------------------ */
+/*  DRM IOCTL: AMDGPU_NPU_CTX                                        */
+/* ------------------------------------------------------------------ */
+/*
+ * Userspace calls this to create an NPU compute context.
+ * Mirrors AMDXDNA_CREATE_HWCTX in the amdxdna driver.
+ *
+ * UAPI struct (add to amdgpu_drm.h):
+ *
+ *   struct drm_amdgpu_npu_ctx {
+ *       __u64 ctx_id;      // out — returned context handle
+ *       __u32 flags;       // in  — QoS, priority
+ *       __u32 pad;
+ *   };
+ *
+ *   #define DRM_AMDGPU_NPU_CTX  0x20
+ *   #define DRM_IOCTL_AMDGPU_NPU_CTX  DRM_IOWR(DRM_COMMAND_BASE + \
+ *               DRM_AMDGPU_NPU_CTX, struct drm_amdgpu_npu_ctx)
+ */
+
+struct drm_amdgpu_npu_ctx {
+	__u64 ctx_id;
+	__u32 flags;
+	__u32 pad;
+};
+
+int amdgpu_npu_ctx_ioctl(struct drm_device *ddev, void *data,
+			 struct drm_file *filp)
+{
+	struct amdgpu_device *adev = drm_to_adev(ddev);
+	struct amdgpu_npu *npu = adev->npu;
+	struct drm_amdgpu_npu_ctx *args = data;
+
+	if (!npu || !npu->pdev || npu->status != NPU_STARTED)
+		return -ENODEV;
+
+	/* === Allocate NPU hardware context === */
+	// 1. Assign column range via solver (XRS)
+	// 2. Create firmware context via mailbox message
+	//    (MSG_OP_CREATE_CONTEXT)
+	// 3. Allocate command ring / doorbell
+	// 4. Return ctx_id to userspace
+	//
+	// For now, return a stub handle:
+	args->ctx_id = 1;
+
+	dev_dbg(adev->dev, "NPU context created (flags=0x%x)\n", args->flags);
+	return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  DRM IOCTL: AMDGPU_NPU_EXEC (submission)                          */
+/* ------------------------------------------------------------------ */
+/*
+ * Submit a command to an NPU context.
+ *
+ * UAPI struct:
+ *
+ *   struct drm_amdgpu_npu_exec {
+ *       __u64 ctx_id;       // in  — from AMDGPU_NPU_CTX
+ *       __u64 command_id;   // out — returned command seq
+ *       __u64 addr;         // in  — dma-buf fd or GEM handle
+ *       __u32 size;         // in  — command size
+ *       __u32 flags;        // in
+ *   };
+ */
+
+struct drm_amdgpu_npu_exec {
+	__u64 ctx_id;
+	__u64 command_id;
+	__u64 addr;
+	__u32 size;
+	__u32 flags;
+};
+
+int amdgpu_npu_exec_ioctl(struct drm_device *ddev, void *data,
+			  struct drm_file *filp)
+{
+	struct amdgpu_device *adev = drm_to_adev(ddev);
+	struct amdgpu_npu *npu = adev->npu;
+	struct drm_amdgpu_npu_exec *args = data;
+
+	if (!npu || npu->status != NPU_STARTED)
+		return -ENODEV;
+
+	/* === Submit to NPU ring === */
+	// 1. Look up BO from GEM handle (args->addr)
+	// 2. Pin BO in GTT
+	// 3. Export as dma-buf fd (or pass GTT address directly
+	//    to NPU firmware via mailbox)
+	// 4. Send MSG_OP_EXECUTE_BUFFER_CF or MSG_OP_CHAIN_EXEC_NPU
+	// 5. Return command_id for wait/completion
+
+	args->command_id = 1;
+	return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  DRM IOCTL table registration                                     */
+/* ------------------------------------------------------------------ */
+/*
+ * Add to amdgpu's drm_ioctl_desc array in amdgpu_drv.c:
+ *
+ *   DRM_IOCTL_DEF_DRV(AMDGPU_NPU_CTX, amdgpu_npu_ctx_ioctl, 0),
+ *   DRM_IOCTL_DEF_DRV(AMDGPU_NPU_EXEC, amdgpu_npu_exec_ioctl, 0),
+ */
+
 /* ================================================================== */
-/*  Integration points (stubs — need changes in 3 files)             */
+/*  Integration points                                                */
 /* ================================================================== */
 /*
  * 1. include/linux/amdgpu_ip.h

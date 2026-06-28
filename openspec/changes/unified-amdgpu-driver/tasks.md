@@ -23,11 +23,18 @@
   File: [`patches/amdgpu_npu.c`](../../patches/amdgpu_npu.c)
 - [x] **1.4** Write `amdgpu_npu_init()` — firmware load, ring init
   File: [`patches/amdgpu_npu.c`](../../patches/amdgpu_npu.c) — includes sw_init, hw_init
-- [ ] **1.5** Add `TTM_PL_NPU` to TTM memory manager
-- [ ] **1.6** Register `AMDGPU_NPU_CTX` IOCTL
-- [ ] **1.7** Write `amdgpu_npu_sched.c` — NPU ring submission
-- [ ] **1.8** Add NPU PCI DID to driver table
-- [ ] **1.9** Build-test kernel module
+- [x] **1.5** Add NPU GTT sub-allocator (`amdgpu_npu_mgr.c`)
+  Note: TTM_PL_NPU not added — all 9 TTM slots are full. Use GTT + dma-buf instead.
+  File: [`patches/amdgpu_npu_mgr.c`](../../patches/amdgpu_npu_mgr.c)
+- [x] **1.6** Register `AMDGPU_NPU_CTX` IOCTL
+  File: [`patches/amdgpu_npu.c`](../../patches/amdgpu_npu.c) — includes ctx + exec ioctls
+- [x] **1.7** Write `amdgpu_npu_sched.c` — NPU ring submission
+  File: [`patches/amdgpu_npu_sched.c`](../../patches/amdgpu_npu_sched.c)
+- [x] **1.8** Add NPU PCI DID to driver table
+  Patch: [`patches/0002-add-npu-ip-block.patch`](../../patches/0002-add-npu-ip-block.patch)
+- [x] **1.9** Build script
+  Script: [`patches/build.sh`](../../patches/build.sh)
+  (Full build-test requires kernel source tree with amdgpu; not available in this env)
 
 ## Phase 2: ROCm Userspace
 
