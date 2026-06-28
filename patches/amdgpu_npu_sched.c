@@ -108,7 +108,6 @@ int amdgpu_npu_submit_packet(struct amdgpu_npu_ring *nring,
 	/* Update NPU's tail pointer register (doorbell) */
 	writel(nring->tail, nring->doorbell);
 
-	dev_dbg(dev, "NPU cmd 0x%x submitted (tail=%u)\n", opcode, nring->tail);
 	return 0;
 }
 
