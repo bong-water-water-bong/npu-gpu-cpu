@@ -17,9 +17,12 @@
   Patch: [`patches/0001-amdxdna-fix-smu-init-order-strix-halo.patch`](../../patches/0001-amdxdna-fix-smu-init-order-strix-halo.patch)
   DKMS PR: [lemonade-sdk/amdxdna-dkms#15](https://github.com/lemonade-sdk/amdxdna-dkms/pull/15)
 - [ ] **1.1** Read amdxdna staging driver — MMIO layout, firmware ABI, ring protocol
-- [ ] **1.2** Read amdgpu IP block init — how VCN/SDMA/JPEG are initialized
-- [ ] **1.3** Write `amdgpu_npu_early_init()` — PCI BAR discovery
-- [ ] **1.4** Write `amdgpu_npu_init()` — firmware load, ring init
+- [x] **1.2** Read amdgpu IP block init — how VCN/SDMA/JPEG are initialized
+  Result: `amdgpu_ip_block_add()` + `amdgpu_device_ip_init()` pattern documented
+- [x] **1.3** Write `amdgpu_npu_early_init()` — PCI BAR discovery
+  File: [`patches/amdgpu_npu.c`](../../patches/amdgpu_npu.c)
+- [x] **1.4** Write `amdgpu_npu_init()` — firmware load, ring init
+  File: [`patches/amdgpu_npu.c`](../../patches/amdgpu_npu.c) — includes sw_init, hw_init
 - [ ] **1.5** Add `TTM_PL_NPU` to TTM memory manager
 - [ ] **1.6** Register `AMDGPU_NPU_CTX` IOCTL
 - [ ] **1.7** Write `amdgpu_npu_sched.c` — NPU ring submission
