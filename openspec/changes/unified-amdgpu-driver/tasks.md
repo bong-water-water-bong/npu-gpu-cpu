@@ -6,7 +6,10 @@
   Test: [`tests/test_gtt_dmabuf.cpp`](../../tests/test_gtt_dmabuf.cpp)
 - [x] **0.2** Verify zero-copy: GPU writes pattern, NPU reads it back
   Result: ✅ PASS — GPU wrote 0xDEADBEEF, NPU read same; NPU wrote 0xCAFEBABE, GPU read same
-- [ ] **0.3** Measure: bandwidth comparison (GTT→NPU vs VRAM→CPU→NPU)
+- [x] **0.3** Measure: bandwidth comparison (GTT→NPU vs GPU local)
+  Test: [`tests/bench_gtt_dmabuf.cpp`](../../tests/bench_gtt_dmabuf.cpp)
+  Result: NPU read 27 GB/s, NPU write 56 GB/s — **identical to GPU local access**
+  Notes: VRAM→CPU→NPU copy path not applicable on APU (no discrete VRAM)
 
 ## Phase 1: Kernel
 
