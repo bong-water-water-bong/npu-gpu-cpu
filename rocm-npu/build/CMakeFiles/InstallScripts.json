@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/bcloud/npu-gpu-cpu/rocm-npu/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

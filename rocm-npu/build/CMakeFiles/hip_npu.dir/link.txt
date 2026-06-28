@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -shared -Wl,--dependency-file=CMakeFiles/hip_npu.dir/link.d -Wl,-soname,libhip_npu.so -o libhip_npu.so CMakeFiles/hip_npu.dir/hip_npu.cpp.o  -ldl

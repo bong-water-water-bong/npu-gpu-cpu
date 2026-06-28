@@ -1,0 +1,7 @@
+/home/bcloud/npu-gpu-cpu/rocm-npu/build/CMakeFiles/hip_npu.dir
+/home/bcloud/npu-gpu-cpu/rocm-npu/build/CMakeFiles/edit_cache.dir
+/home/bcloud/npu-gpu-cpu/rocm-npu/build/CMakeFiles/rebuild_cache.dir
+/home/bcloud/npu-gpu-cpu/rocm-npu/build/CMakeFiles/list_install_components.dir
+/home/bcloud/npu-gpu-cpu/rocm-npu/build/CMakeFiles/install.dir
+/home/bcloud/npu-gpu-cpu/rocm-npu/build/CMakeFiles/install/local.dir
+/home/bcloud/npu-gpu-cpu/rocm-npu/build/CMakeFiles/install/strip.dir

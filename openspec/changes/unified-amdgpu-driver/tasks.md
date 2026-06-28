@@ -38,12 +38,19 @@
 
 ## Phase 2: ROCm Userspace
 
-- [ ] **2.1** Extend `rocminfo` to detect NPU agent
-- [ ] **2.2** Write `hip_npu.cpp` — device enumeration
-- [ ] **2.3** Write `hip_npu_memory.cpp` — hipMalloc/hipFree
-- [ ] **2.4** Write NPU AQL packet defs (`npu_aql.h`)
+- [x] **2.1** Extend `rocminfo` to detect NPU agent
+  Note: Already done by ROCm — `rocminfo` shows Agent 3: `aie2`, DSP type
+- [x] **2.2** Write `hip_npu.cpp` — device enumeration
+  File: [`rocm-npu/hip_npu.cpp`](../../rocm-npu/hip_npu.cpp)
+  Result: `LD_PRELOAD=libhip_npu.so` — HIP sees 2 devices (GPU + NPU)
+- [x] **2.3** Write `hip_npu_memory.cpp` — hipMalloc/hipFree
+  (Merged into hip_npu.cpp — mmap-based GTT allocation)
+- [x] **2.4** Write NPU AQL packet defs (`npu_aql.h`)
+  File: [`rocm-npu/npu_aql.h`](../../rocm-npu/npu_aql.h)
 - [ ] **2.5** Implement `hipLaunchKernel` for NPU
+  (Needs NPU firmware integration — mailbox-based command submission)
 - [ ] **2.6** Test: simple GEMM on NPU via HIP
+  (Blocked on 2.5 — needs working kernel dispatch)
 
 ## Phase 3: Scheduler Daemon
 
