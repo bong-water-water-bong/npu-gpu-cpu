@@ -2,6 +2,8 @@
 
 ## Phase 1: Kernel
 
+- [x] **1.0** Fix SMU init order in aie2_hw_start() — PSP before SMU (Strix Halo)
+  Patch: [`patches/0001-amdxdna-fix-smu-init-order-strix-halo.patch`](../../patches/0001-amdxdna-fix-smu-init-order-strix-halo.patch)
 - [ ] **1.1** Read amdxdna staging driver — MMIO layout, firmware ABI, ring protocol
 - [ ] **1.2** Read amdgpu IP block init — how VCN/SDMA/JPEG are initialized
 - [ ] **1.3** Write `amdgpu_npu_early_init()` — PCI BAR discovery
