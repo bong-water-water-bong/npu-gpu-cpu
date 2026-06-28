@@ -54,9 +54,12 @@
 
 ## Phase 3: Scheduler Daemon
 
-- [ ] **3.1** Write `npu-gpu-cpud` — gRPC/REST API
-- [ ] **3.2** Implement dispatch policy table
+- [x] **3.1** Write `npu-gpu-cpud` — REST API + health endpoint
+  File: [`daemon/npu-gpu-cpud.py`](../../daemon/npu-gpu-cpud.py)
+- [x] **3.2** Implement dispatch policy table
+  Policy: `< 2B → NPU`, `2B-8B → GPU`, `> 8B → CPU`
 - [ ] **3.3** Integrate with Lemonade BackendManager
+  (Needs: actual NPU inference integration via flm/lemonade)
 
 ## Documentation
 
