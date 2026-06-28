@@ -1,5 +1,11 @@
 # Tasks — Unified AMDGPU Driver
 
+## Phase 0: Shared GTT (dma-buf) Prototype
+
+- [ ] **0.1** Write dma-buf sharing test: amdgpu TTM_PL_TT → export → amdxdna import
+- [ ] **0.2** Verify zero-copy: GPU writes a pattern via GTT, NPU reads it via SVA
+- [ ] **0.3** Measure: bandwidth comparison (GTT→NPU vs VRAM→CPU→NPU)
+
 ## Phase 1: Kernel
 
 - [x] **1.0** Fix SMU init order in aie2_hw_start() — PSP before SMU (Strix Halo)
