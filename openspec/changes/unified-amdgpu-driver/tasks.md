@@ -61,6 +61,12 @@
 - [ ] **3.3** Integrate with Lemonade BackendManager
   (Needs: actual NPU inference integration via flm/lemonade)
 
+## Upstream PRs
+
+- [x] **P1** Ping SMU init fix — `lemonade-sdk/amdxdna-dkms` [#15](https://github.com/lemonade-sdk/amdxdna-dkms/pull/15)
+- [x] **P2** Ping vLLM dual-GPU fix — `lemonade-sdk/lemonade` [#2474](https://github.com/lemonade-sdk/lemonade/pull/2474)
+- [x] **P3** Ping get_rocm_arch() fix — `lemonade-sdk/lemonade` [#2459](https://github.com/lemonade-sdk/lemonade/pull/2459)
+
 ## Documentation
 
 - [ ] **4.1** Write `docs/wiki/amdgpu-npu-architecture.md`
