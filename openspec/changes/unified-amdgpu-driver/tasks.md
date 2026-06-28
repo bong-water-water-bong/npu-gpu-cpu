@@ -69,5 +69,7 @@
 
 ## Documentation
 
-- [ ] **4.1** Write `docs/wiki/amdgpu-npu-architecture.md`
-- [ ] **4.2** Write `docs/wiki/building-and-testing.md`
+- [x] **4.1** Write `docs/wiki/amdgpu-npu-architecture.md`
+  File: [`docs/wiki/amdgpu-npu-architecture.md`](../../docs/wiki/amdgpu-npu-architecture.md)
+- [x] **4.2** Write `docs/wiki/building-and-testing.md`
+  File: [`docs/wiki/building-and-testing.md`](../../docs/wiki/building-and-testing.md)
