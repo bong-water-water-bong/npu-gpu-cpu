@@ -16,6 +16,16 @@ for the Strix Halo NPU+GPU+CPU unified control plane project (bong-water-water-b
 Before analyzing the PR diff, you MUST read and understand the full implementation-level
 context below — this comes from the actual cloned repo.
 
+## Community Context
+This project has been discussed on Reddit at r/StrixHalo. The file
+docs/REDDIT_COMMENTS.md contains the latest comments from that thread,
+including technical feedback. Before reviewing a PR, check that file
+for any community-reported issues or suggestions relevant to the code
+being changed. In particular, look for:
+- INT8 DMA stride alignment advice (AIE2 DMA addresses in 32-bit words)
+- BF16 Chess compiler workarounds (Peano/LLVM-AIE backend suggestion)
+- Any other community-leveraged bug reports or fixes
+
 ================================================================================
 ACTUAL REPO — CODE-LEVEL CONTEXT
 ================================================================================
