@@ -1,0 +1,17 @@
+# Reddit scraper session data (auto-generated)
+.reddit_sessions/
+
+# Build artifacts
+build/
+*.o
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.pyc

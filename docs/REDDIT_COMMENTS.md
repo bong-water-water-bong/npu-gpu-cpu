@@ -2,9 +2,9 @@
 
 - **Subreddit:** r/StrixHalo
 - **Author:** u/Creepy-Douchebag
-- **Score:** 10
+- **Score:** 12
 - **Comments:** 3
-- **Fetched:** 2026-06-29T17:42:28.416851+00:00
+- **Fetched:** 2026-06-29T17:46:32.345082+00:00
 - **URL:** https://www.reddit.com/r/StrixHalo/comments/1uitnkr/we_ran_qwen306b_on_the_strix_halo_npu_at_48_toks/
 
 ## Post Body

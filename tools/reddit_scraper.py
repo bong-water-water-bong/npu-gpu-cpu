@@ -107,7 +107,7 @@ def _build_session_from_praw(submission, url: str) -> dict:
         "meta": meta,
         "comments": comments,
         "comments_flat": comments_flat,
-        "comment_ids": list({c["id"] for c in comments_flat}),
+        "comment_ids": sorted({c["id"] for c in comments_flat}),
     }
 
 
@@ -226,7 +226,7 @@ def _build_session_from_html(url: str, post_id: str, subreddit: str) -> dict:
         "meta": meta,
         "comments": comments_flat,
         "comments_flat": comments_flat,
-        "comment_ids": list({c["id"] for c in comments_flat}),
+        "comment_ids": sorted({c["id"] for c in comments_flat}),
     }
 
 
@@ -270,7 +270,7 @@ def do_recheck(session_path: Path, output_path: Path = None):
         "meta": new_session["meta"],
         "comments": merged_flat,
         "comments_flat": merged_flat,
-        "comment_ids": list(seen),
+        "comment_ids": sorted(seen),
         "recheck_history": {
             "previous_fetch": old_session["meta"]["fetched_at"],
             "current_fetch": new_session["meta"]["fetched_at"],
