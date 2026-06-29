@@ -1,0 +1,73 @@
+{
+  "meta": {
+    "url": "https://www.reddit.com/r/StrixHalo/comments/1uitnkr/we_ran_qwen306b_on_the_strix_halo_npu_at_48_toks/",
+    "title": "**We ran Qwen3-0.6B on the Strix Halo NPU at 4.8 tok/s -- need help unlocking INT8** : StrixHalo",
+    "subreddit": "StrixHalo",
+    "post_id": "1uitnkr",
+    "author": "Creepy-Douchebag",
+    "score": 12,
+    "upvote_ratio": null,
+    "created_utc": null,
+    "num_comments": 3,
+    "fetched_at": "2026-06-29T17:46:32.345082+00:00",
+    "selftext": "We ran Qwen3-0.6B on the Strix Halo NPU at 4.8 tok/s -- need help unlocking INT8 TL;DR: Reverse-engineered the undocumented AMD XDNA2 NPU on Strix Halo (Ryzen AI MAX+ 395) to run Qwen3-0.6B at 210ms/tok (4.8 tok/s) -- 3.2x faster than CPU. Built everything from scratch -- 15 xclbins, 7 compiler bug fixes, full IRON API pipeline. But INT8 is blocked by the MLIR toolchain (only accepts BFP16 types), and BF16 DMA hangs due to aiecc descriptor generation bugs. Need community help. What We Built The vision: Fold amdxdna (NPU) into amdgpu so the NPU, GPU, and CPU share one memory manager, one DRM fd, and one ROCm compute API. \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u2502 Lemonade SDK / Ollama \u2502 \u2502 (Single API -- any model, any HW) \u2502 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2502 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25bc\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u2502 ROCm HIP Runtime \u2502 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2502 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u2502 \u2502 \u2502 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25bc\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25bc\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25bc\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u2502 GPU (GFX) \u2502 \u2502 NPU (XDNA2) \u2502 \u2502 CPU (x86) \u2502 \u2502 amdgpu driver \u2502 \u2502 amdgpu NPU IP \u2502 \u2502 Native (Zen 5) \u2502 \u2502 RDNA 3.5 CUs \u2502 \u2502 8 AIE columns \u2502 \u2502 ~2-3 tok/s CPU \u2502 \u2502 80 TFLOPS FP16 \u2502 \u2502 31 TFLOPS BFP16 \u2502 \u2502 (llama.cpp) \u2502 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2502 \u2502 \u2502 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 \u2502 \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25bc\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510 \u2502 Unified Memory Manager \u2502 \u2502 One DRM fd, one address space \u2502 \u2502 Shared page table (GPU-&gt;NPU-&gt;CPU) \u2502 \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518 The current stack (pre-unification): 6 custom xclbins -&gt; 4 GEMMs/layer x 28 layers = 112 NPU calls/token Fused QKV (1024x4096) + Fused GU (1024x6144) + O + D projections Threaded LM head (4x) + Threaded attention (4x) BFP16 format (hardware-native block float, RMSE 0.0003) Performance Metric CPU (llama.cpp) NPU (This Work) Gain Decode latency ~668 ms/tok 210 ms/tok 3.2x Throughput ~1.5 tok/s 4.8 tok/s 3.2x Power efficiency ~25-35W ~12W NPU+CPU ~3x perf/W The NP",
+    "scraped": true
+  },
+  "comments": [
+    {
+      "id": "t1_ouiimny",
+      "author": "RedParaglider",
+      "body": "Who is we? How many are on your team.",
+      "score": null,
+      "depth": 0,
+      "created_utc": null
+    },
+    {
+      "id": "t1_ouiki6g",
+      "author": "Creepy-Douchebag",
+      "body": "Pi.dev + Deepseek v4 chat",
+      "score": null,
+      "depth": 0,
+      "created_utc": null
+    },
+    {
+      "id": "t1_ouje2so",
+      "author": "Poizone360",
+      "body": "Hey, great work. For the INT8 strides, AIE2 DMA appears to address memory in 32-bit words, so this is probably more than just a 1.125 to 1.0 byte change. INT8 likely needs four elements packed per word in the innermost stream dimension, with strides measured in words rather than bytes. It would be worth checking dimensionsToStream against that word alignment, since BFP16\u2019s block layout may be masking the sub-word packing that INT8 now requires. For the BF16 Chess hang, try the Peano/LLVM-AIE backend, because that descriptor bug seems specific to Chess and a different codegen path may avoid it. It would also help to file a minimal INT8 objectfifo reproducer as an issue, since the AIE team tends to respond quickly on DMA stride semantics.",
+      "score": null,
+      "depth": 0,
+      "created_utc": null
+    }
+  ],
+  "comments_flat": [
+    {
+      "id": "t1_ouiimny",
+      "author": "RedParaglider",
+      "body": "Who is we? How many are on your team.",
+      "score": null,
+      "depth": 0,
+      "created_utc": null
+    },
+    {
+      "id": "t1_ouiki6g",
+      "author": "Creepy-Douchebag",
+      "body": "Pi.dev + Deepseek v4 chat",
+      "score": null,
+      "depth": 0,
+      "created_utc": null
+    },
+    {
+      "id": "t1_ouje2so",
+      "author": "Poizone360",
+      "body": "Hey, great work. For the INT8 strides, AIE2 DMA appears to address memory in 32-bit words, so this is probably more than just a 1.125 to 1.0 byte change. INT8 likely needs four elements packed per word in the innermost stream dimension, with strides measured in words rather than bytes. It would be worth checking dimensionsToStream against that word alignment, since BFP16\u2019s block layout may be masking the sub-word packing that INT8 now requires. For the BF16 Chess hang, try the Peano/LLVM-AIE backend, because that descriptor bug seems specific to Chess and a different codegen path may avoid it. It would also help to file a minimal INT8 objectfifo reproducer as an issue, since the AIE team tends to respond quickly on DMA stride semantics.",
+      "score": null,
+      "depth": 0,
+      "created_utc": null
+    }
+  ],
+  "comment_ids": [
+    "t1_ouiimny",
+    "t1_ouiki6g",
+    "t1_ouje2so"
+  ]
+}
