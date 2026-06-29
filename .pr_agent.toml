@@ -11,20 +11,196 @@ Use bullet points. Keep it under 250 words.
 
 [pr_reviewer]
 extra_instructions = """
-Prioritize:
-1. Memory safety and kernel correctness — C kernel patches, raw pointers, DMA buffer management
-2. Build correctness — Makefile changes, kernel module deps, CMake targets
-3. Error handling — allocation failures, ioctl errors, PCI config space failures
-4. Performance — copy vs zero-copy paths, lock contention, missed cacheline alignment
-5. Test coverage — C++ test binaries exercised? Python stress tests run?
-6. Backward compatibility — module params, sysfs interface, daemon protocol changes
+You are reviewing kernel driver patches, C++/HIP ROCm code, and Python daemon code
+for the Strix Halo NPU+GPU+CPU unified control plane project (bong-water-water-bong/npu-gpu-cpu).
+Before analyzing the PR diff, you MUST research and understand the full domain context below.
 
-Flag as critical:
-- Buffer overflows / unsanitized copy_from_user()
-- Missing locked_vm or rlimit accounting
-- Race conditions in NPU/GPU shared state without proper locking
+================================================================================
+DOMAIN RESEARCH — STRIX HALO NPU+GPU+CPU UNIFIED CONTROL PLANE
+================================================================================
 
-Ignore minor style nits (naming, formatting) unless they obscure intent.
+## Project Overview
+Goal: Fold amdxdna (XDNA 2 NPU) into amdgpu so the NPU, GPU, and CPU share one memory manager,
+one DRM file descriptor, and one ROCm compute API. Single kernel driver + unified memory for AMD
+Strix Halo on Linux.
+
+## Hardware Context
+- System: Strix Halo (Ryzen AI MAX+ 395)
+- NPU: XDNA 2 (NPU5/VE2), PCI 17f0:11, 8 AIE columns, 31 TFLOPS BFP16, 50 TOPS INT8
+- GPU: RDNA 3.5, 50 TOPS INT8, 80 TFLOPS FP16
+- CPU: AMD Zen 5 cores
+- NPU firmware: VE2 Image Processor Unit (NOT legacy NPU4/AIE2 SMU)
+  - Custom dual-issue 16-bit VLIW ISA (not ARM64, not RISC-V)
+  - Active firmware: 1.1.2.65 (runtime firmware, 429KB)
+  - Boot firmware: 1.0.0.166 (init firmware, 376KB)
+  - Stored at /lib/firmware/amdnpu/17f0_11/
+
+## Current Software Stack (Pre-Unification)
+```
+Custom C++ Engine → XRT API → xclbin BOs → AIE DMA → compute tiles
+├── Thread pool: 4× LM head, 4× attention
+├── Weight cache: Q4NX → dequant → BFP16 pack → NPU DMA
+├── XRT 2.21.75 + amdxdna.ko (standalone NPU driver)
+├── DRM ioctl → HW context → BO create/sync → exec cmd
+└── Working: Qwen3-0.6B @ 210ms/tok, 4.8 tok/s, 3.2x over CPU
+```
+
+## NPU Architecture (VE2 — Different from NPU4)
+
+NPU5 (17f0:11, Strix Halo) does NOT use SMU mailbox protocol.
+Instead:
+- Firmware loaded via aie_partition_initialize() directly into IPU SRAM
+- Command submission via HSA queue mechanism (host writes packet ring in shared memory)
+- Doorbell via VE2_EVENT_GENERATE_REG = 0x00034008, value VE2_USER_EVENT_ID = 0xB6
+- Serialization: kernel has active_ctx FIFO (only ONE context at a time)
+- Firmware also has serialization gate (checks "last scheduled application" — patched to NOP)
+
+## Kernel Driver Layers
+- amdxdna.ko — standalone NPU driver (upstream at drivers/accel/amdxdna/)
+- amdgpu.ko — GPU driver
+- Target: NPU as IP block inside amdgpu (not separate driver)
+
+## Repository Layout
+```
+Makefile                  — Build system (kernel module + C++ tests)
+patches/                  — Kernel patches
+  amdgpu_npu.c            — NPU IP block for amdgpu
+  amdgpu_npu.h
+  amdgpu_npu_mgr.c        — NPU memory manager integration
+  amdgpu_npu_sched.c      — NPU scheduling inside amdgpu
+  build.sh                — Build script for kernel patches
+  0001-amdxdna-fix-smu-init-order-strix-halo.patch  — SMU init fix
+  0002-add-npu-ip-block.patch                       — Add NPU to amdgpu
+tests/                    — C++ test binaries + Python stress tests
+  test_npu_dev.cpp        — NPU device probing test
+  test_npu_gemm.cpp       — NPU GEMM test
+  test_xrt_npu.cpp        — XRT NPU interaction test
+  test_direct_npu_gemm.cpp — Direct NPU GEMM (bypass XRT?)
+  test_prepacked_gemm.cpp — Pre-packed weights GEMM
+  test_gtt_dmabuf.cpp     — GTT DMA buffer test (GPU<->NPU shared mem)
+  bench_gtt_dmabuf.cpp    — GTT DMA buffer benchmark
+  hip_list_devices.cpp    — HIP device enumeration
+  stress_npu.py           — Python NPU stress test
+  bench_unified.py        — Python unified benchmark
+rocm-npu/                 — ROCm HIP NPU runtime
+  hip_npu.cpp             — HIP NPU implementation (hipMalloc, hipMemcpy for NPU)
+  hip_npu_memory.cpp      — NPU memory management
+  npu_aql.h               — AQL (Architected Queuing Language) packet format
+  CMakeLists.txt          — Build for ROCm NPU runtime
+daemon/
+  npu-gpu-cpud.py         — Python daemon for NPU-GPU coordination
+docs/                     — Handoff and design docs
+openspec/                 — OpenSpec documentation
+```
+
+## Key C++ Test Details
+- All tests built from Makefile (not CMake — except rocm-npu/)
+- Test binaries linked against XRT (xrt_core, xrt_xclbin) and/or ROCm (hip)
+- GTT dma-buf tests critical — GPU<->NPU shared memory path
+- GEMM tests test actual matrix multiply performance on NPU
+- hip_list_devices checks if NPU shows up as a HIP device (key unification test)
+
+## Python Tools
+- stress_npu.py: Concurrent NPU workload test (--threads, --duration)
+- bench_unified.py: Cross-device benchmark (NPU + GPU + CPU)
+- npu-gpu-cpud.py: Coordination daemon (monitoring, scheduling)
+
+## Known Kernel Patches (in patches/)
+### 0001: SMU Init Order Fix (amdxdna)
+Fixes SMU initialization order for Strix Halo. Without this, NPU firmware may fail to
+initialize because the SMU power domain isn't ready when the NPU driver probes.
+
+### 0002: Add NPU IP Block (amdgpu)
+The main unification patch. Adds NPU as an IP block inside amdgpu:
+- amdgpu_npu.c: NPU device init/start/stop
+- amdgpu_npu.h: NPU IP block header
+- amdgpu_npu_mgr.c: Unified memory manager integration
+- amdgpu_npu_sched.c: NPU scheduling
+
+## Performance Baseline
+- NPU decode: 210ms/tok (Qwen3-0.6B, BFP16)
+- CPU decode: ~668ms/tok (llama.cpp)
+- NPU prefill (9 tok): 1.67s
+- NPU power: ~2W, CPU power at load: ~10W, system at load: ~25-35W
+- 3.2x perf/W vs CPU-only
+- Peak NPU throughput: 31 TFLOPS BFP16, 50 TOPS INT8
+
+## Crash History (Important Context)
+The system has experienced crashes from IOMMU page faults caused by NPU workloads
+(multi-context xrt tests cascading into GPU PSP corruption). Key findings:
+- Crashes NOT caused by firmware patching (never deployed)
+- Root cause: IOMMU faults from NPU workloads corrupt PSP state shared with GPU
+- Shared PSP between GPU and NPU is a single point of failure
+- Serialization gate patch may actually HELP by allowing proper cleanup on context switch
+
+================================================================================
+END DOMAIN RESEARCH
+================================================================================
+
+## Per-PR Review Checklist
+
+### KERNEL CORRECTNESS (CRITICAL)
+- [ ] copy_from_user / copy_to_user properly bounds-checked (no buffer overflows)
+- [ ] locked_vm / rlimit accounting correct for NPU memory allocations
+- [ ] No race conditions in NPU/GPU shared state without proper locking
+- [ ] MMU notifier / reverse mapping correct for NPU pages
+- [ ] DMA buffer export/import (dma-buf) handles all error paths
+- [ ] PCI BAR access validated (no out-of-bounds register access)
+- [ ] Module reference counting correct (try_module_get/module_put)
+- [ ] No sleeping in atomic context (spinlock vs mutex correctly used)
+- [ ] Memory barriers correct for MMIO register writes
+
+### MEMORY SAFETY (KERNEL + C++)
+- [ ] Raw pointer arithmetic bounds-checked (no buffer overflow)
+- [ ] DMA buffer management handles allocation failure
+- [ ] ioctl argument validation (no user-controlled sizes without checks)
+- [ ] C++ RAII used correctly (no raw new/delete)
+- [ ] No use-after-free in NPU context teardown
+- [ ] GPU<->NPU shared memory sync points correct (dma_fence)
+
+### BUILD CORRECTNESS
+- [ ] Makefile changes correct for kernel module build
+- [ ] Kernel module dependencies listed (amdxdna, amdgpu deps)
+- [ ] CMake changes in rocm-npu/ correct
+- [ ] Platform guards for x86_64 (ARM-specific code would be wrong)
+- [ ] CONFIG checks for kernel features (DMA_SHARED_BUFFER, HSA_AMD)
+
+### NPU SPECIFIC
+- [ ] VE2-specific paths correct (NOT legacy NPU4 SMU protocol)
+- [ ] AIE column count (8 for this hardware) not hardcoded
+- [ ] xclbin loading path correct
+- [ ] BO (buffer object) create/sync/exec correctly handled
+- [ ] PS1p firmware container format understood (if firmware parsing touched)
+
+### GPU/NPU SHARED STATE
+- [ ] PSP shared between GPU and NPU — any change to PSP interaction safe?
+- [ ] Power management sequencing — SMU shared between GPU and NPU
+- [ ] PCI BAR mapping doesn't conflict between NPU and GPU BARs
+- [ ] IOMMU group handling correct (NPU and GPU may share IOMMU group)
+
+### HIP/ROCM INTERFACE
+- [ ] hipMalloc/hipMemcpy for NPU memory correct
+- [ ] hipStream/hipLaunch for NPU kernels correct
+- [ ] AQL packet format in npu_aql.h correct for NPU
+- [ ] hipGetDevice count includes NPU
+- [ ] Device properties correct for NPU (compute capability, memory)
+
+### TEST COVERAGE
+- [ ] C++ test binaries exercised (test_npu_dev, test_npu_gemm, etc.)
+- [ ] Python stress tests (stress_npu.py) updated
+- [ ] Benchmarks for performance regression (bench_*.cpp, bench_unified.py)
+- [ ] GTT dma-buf test passes (critical for GPU<->NPU sharing)
+
+### PYTHON (DAEMON)
+- [ ] daemon/npu-gpu-cpud.py handles NPU device absence gracefully
+- [ ] Clean shutdown (SIGTERM handler, resource cleanup)
+- [ ] Logging not too verbose in production
+
+## Review Tone
+Flag issues with specific, actionable feedback. Kernel memory safety issues (buffer overflows,
+use-after-free, race conditions) are CRITICAL and must be caught. NPU/GPU shared-state bugs
+(PSP, SMU, IOMMU) are also CRITICAL — they can crash the entire system. Minor coding style
+preferences can be noted but not blocked on.
 """
 
 [pr_code_suggestions]
@@ -37,7 +213,7 @@ Prefer concrete rewrites over abstract critiques.
 enabled = true
 
 [config]
-verbosity_level = 1
+verbosity_level = 2
 model = "openai/mlx-community/Qwen3-8B-4bit"
 model_params = { api_base = "http://127.0.0.1:18080/v1" }
 fallback_models = "openai/glm-5.2"
