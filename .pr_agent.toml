@@ -1,0 +1,44 @@
+[pr_description]
+extra_instructions = """
+Focus on:
+1. What behavior changed (not just what code changed)
+2. Kernel/driver impact — amdgpu patches, module params, ABI changes
+3. NPU vs GPU interface changes — HIP API, AQL packets, memory management
+4. Breaking changes — kernel interface, PCI BAR layout, ioctl ABI
+5. Performance implications — DMA paths, GTT/memory bandwidth, scheduling latency
+Use bullet points. Keep it under 250 words.
+"""
+
+[pr_reviewer]
+extra_instructions = """
+Prioritize:
+1. Memory safety and kernel correctness — C kernel patches, raw pointers, DMA buffer management
+2. Build correctness — Makefile changes, kernel module deps, CMake targets
+3. Error handling — allocation failures, ioctl errors, PCI config space failures
+4. Performance — copy vs zero-copy paths, lock contention, missed cacheline alignment
+5. Test coverage — C++ test binaries exercised? Python stress tests run?
+6. Backward compatibility — module params, sysfs interface, daemon protocol changes
+
+Flag as critical:
+- Buffer overflows / unsanitized copy_from_user()
+- Missing locked_vm or rlimit accounting
+- Race conditions in NPU/GPU shared state without proper locking
+
+Ignore minor style nits (naming, formatting) unless they obscure intent.
+"""
+
+[pr_code_suggestions]
+extra_instructions = """
+Suggestions should be actionable and specific. Avoid generic advice.
+Prefer concrete rewrites over abstract critiques.
+"""
+
+[pr_questions]
+enabled = true
+
+[config]
+verbosity_level = 1
+model = "openai/mlx-community/Qwen3-8B-4bit"
+model_params = { api_base = "http://127.0.0.1:18080/v1" }
+fallback_models = "openai/glm-5.2"
+custom_model_max_tokens = 64000
