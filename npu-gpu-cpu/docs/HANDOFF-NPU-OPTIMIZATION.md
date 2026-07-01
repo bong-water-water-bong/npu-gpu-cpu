@@ -1,4 +1,4 @@
-## FINAL STATUS (2026-06-28, end of session)
+## UPDATE 13 (2026-07-01 04:00 ADT): INT8 ENGINE COMPLETE — 219 ms/tok, CONTEXT POOL
 
 ## 🏆 Peak Achievement: 31.0 TFLOPS on NPU (config2 design)
 
@@ -1073,3 +1073,112 @@ The xclbins are valid for K-invariant workloads (batchnorm at inference, uniform
 3. **Layer batching**: Fuse O and D across layers (8-column design already handles K up to 6144)
 4. **2-layer batch + multi-token combined**: 2 tokens × 2 layers per batch → 28/2=14 batches → ~80ms/2tok = 40ms/tok
 
+
+### INT8 Engine Architecture
+
+```
+Engine pipeline (219 ms/tok, 4.6 tok/s):
+
+Init:      Register 4 xclbins → create 4 hw_contexts + BOs → dequant model → pack INT8 weights
+            └─ Context pool: xclbins persist across swaps, only hc recreated per GEMM
+
+Per-layer: RMS norm → QKV GEMM(514μs) → Q/K norm+RoPE → CPU softmax+attention →
+           O GEMM(252μs) → residual → RMS norm → GU GEMM(742μs) → SiLU →
+           D GEMM(326μs) → residual  (×28 layers)
+
+Per-token: Final RMS norm → LM head(CPU: 155M MACs) → softmax sample → embed lookup
+```
+
+### Speed History
+
+| Engine | ms/tok | tok/s | Key Change |
+|--------|--------|-------|------------|
+| INT8 scalar kernel | 13,000 | 0.08 | matmul_scalar_i8_i16 |
+| INT8 vectorized | 442 | 2.3 | matmul_i8_i16 (mac_8x8_8x8) |
+| + -O3 + cached norms | 371 | 2.7 | Compiler flags, norm caching |
+| + Context pool | **219** | **4.6** | Eliminate xclbin re-registration |
+| BFP16 v8 (baseline) | 1,335 | 0.7 | — |
+| FLM proprietary | 11 | 93 | Reference (proprietary stack) |
+
+### Proven NPU GEMM Performance
+
+| Projection | Shape | Latency | TFLOPS |
+|-----------|-------|---------|--------|
+| QKV (fused) | 128×1024×4096 | 514 μs | 2.1 |
+| O | 128×2048×1024 | 252 μs | 2.1 |
+| GU (fused) | 128×1024×6144 | 742 μs | 2.2 |
+| D | 128×3072×1024 | 326 μs | 2.5 |
+
+### Context Pool Architecture
+
+Instead of the old sa() (ensure-alive swap) which destroyed and recreated
+the entire XRT state (xclbin registration, hw_context, kernel, BOs), the
+new design pre-registers all 4 xclbins at init. Per-layer switching only
+recreates hw_context and kernel — BOs persist. This eliminates 112
+xclbin re-registrations and BO re-creations per token.
+
+```cpp
+struct I8Slot {
+    xrt::uuid uuid;  // pre-registered
+    unique_ptr<xrt::bo> bA,bB,bC;  // persist across swaps
+    void activate(xrt::device& d){
+        hc.reset(); hc=make_unique<xrt::hw_context>(d,uuid);
+        k.reset(); k=make_unique<xrt::kernel>(*hc,"MLIR_AIE");
+    }
+};
+```
+
+### Path to 50-100 ms/tok (10-20 tok/s)
+
+| # | Optimization | Speedup | Est ms/tok | Effort |
+|---|-------------|---------|------------|--------|
+| 1 | ✅ Context pool | 42% | 219 | Done |
+| 2 | Weight pre-loading (layer-dim B taps) | 26% | ~160 | 3 days |
+| 3 | LM head on NPU (dedicated xclbin) | 9% | ~145 | 2 days |
+| 4 | 32-core GEMM xclbins | 20% | ~115 | 5 days |
+| 5 | NPU edge attention (BF16) | 18% | ~85 | 3 days |
+| 6 | Fused QKV-attn-O xclbin | 10% | ~70 | 7 days |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `npu-infer/bf16_kernel_dev/n1_core_i8_v2.py` | INT8 GEMM MLIR generator (8-core, broadcast) |
+| `npu-infer/bf16_kernel_dev/n1_core_i8_4row.py` | INT8 GEMM MLIR generator (32-core, 4×8) |
+| `npu-infer/src/npu_engine_i8.cpp` | INT8 inference engine (219 ms/tok) |
+| `npu-infer/build/int8/final_i8_*_v.xclbin` | 5 vectorized INT8 xclbins |
+| `npu-infer/build/int8/insts_i8_*_v.txt` | Instruction sequences |
+| `npu-infer/build/chess_infer/attn_06b.xclbin` | NPU edge attention (421 μs, DPU kernel) |
+
+### Build Commands
+
+```bash
+# Rebuild xclbins (if generator changes)
+cd npu-infer/build/int8
+xchesscc_wrapper aie2p -c -I $AIETOOLS_DIR/include -I $MLIR_AIE_DIR/include \
+  -DDIM_M=32 -DDIM_K=64 -DDIM_N=128 -I$MLIR_AIE_DIR/include/aie_kernels \
+  -Di8_i16_ONLY $MLIR_AIE_DIR/include/aie_kernels/aie2p/mm.cc -o mm_32x64x128.o
+
+PYTHONPATH=$MLIR_AIE_DIR/python python ../bf16_kernel_dev/n1_core_i8_v2.py \
+  -M 128 -K $K -N $N -m 32 -k 64 -n 128 > design.mlir
+
+aiecc --aietools=$AIETOOLS_DIR --alloc-scheme=basic-sequential \
+  --aie-generate-xclbin --no-compile-host --unified --dynamic-objFifos \
+  --xclbin-name=final.xclbin --npu-insts-name=insts.txt design.mlir
+
+# Build engine
+cd npu-infer/build
+g++ -std=c++17 -O3 -march=native -ffast-math \
+  -I../include -I$TORCH2AIE/examples \
+  -I$TORCH2AIE/examples/gemm_asymmetric_tile_buffering \
+  ../src/npu_engine_i8.cpp dequant_q4nx.o \
+  -o npu_engine_i8 -lxrt_coreutil -lm -luuid
+
+# Run
+sudo ./npu_engine_i8
+```
+
+### Repos
+
+- `https://github.com/bong-water-water-bong/npu-infer` — INT8 engine + xclbin generators
+- `https://github.com/bong-water-water-bong/npu-gpu-cpu` — Handoff docs + unified control plane
